@@ -1,0 +1,15 @@
+/.runtime/
+/.venv/
+/.env*
+__pycache__/
+*.py[cod]
+/data/
+/logs/
+/reproduced/
+*.pt
+*.pth
+*.log
+*.aux
+*.out
+*.zip
+/results/*/scores_*.csv

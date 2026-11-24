@@ -1,0 +1,221 @@
+\documentclass[11pt,letterpaper]{article}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=0.78in,headheight=14pt,footskip=23pt]{geometry}
+\usepackage{amsmath,booktabs,tabularx,graphicx,xcolor,fancyhdr}
+\usepackage[colorlinks=true,urlcolor=blue!55!black,linkcolor=blue!55!black,
+  pdfauthor={Yuelin Li and Xiaoyu Chen},
+  pdftitle={Adversarial Debiasing on UCI Adult}]{hyperref}
+
+\definecolor{ink}{HTML}{172A40}
+\definecolor{accent}{HTML}{14566E}
+\definecolor{muted}{HTML}{435970}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{5pt}
+\setlength{\tabcolsep}{5pt}
+\setlength{\emergencystretch}{2em}
+\renewcommand{\arraystretch}{1.13}
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+\newcommand{\gap}[1]{#1\,pp}
+\newcommand{\rate}[1]{#1\%}
+\newcommand{\question}[2]{\section*{Q#1. #2}}
+\newcommand{\plot}[3]{%
+  \par\smallskip\noindent\begin{minipage}{\linewidth}\makebox[\linewidth][c]{%
+  \includegraphics[width=\linewidth,height=#1,keepaspectratio]{#2}}%
+  \par{\small\color{muted}#3\par}\end{minipage}\par\smallskip}
+\raggedbottom
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[R]{\small\sffamily\color{muted}\thepage}
+\renewcommand{\headrulewidth}{0pt}
+
+\begin{document}
+
+{\small\sffamily\bfseries\color{accent}WORKSHOP REPORT\par}
+\vspace{2pt}
+{\fontsize{27}{30}\selectfont\sffamily\bfseries\color{ink}
+Adversarial Debiasing on UCI Adult\par}
+\vspace{3pt}
+{\large\color{muted}Twelve training runs and answers to Q1--Q12\par}
+\vspace{3pt}
+{\normalsize\sffamily\bfseries\color{ink}Yuelin Li and Xiaoyu Chen\par}
+\vspace{3pt}
+
+UCI Adult, also called Census Income, is a dataset drawn from 1994 U.S. census records. We use information such as age, education, and occupation to predict whether a person's annual income exceeds \$50,000. [\href{https://archive.ics.uci.edu/dataset/2/adult}{UCI Adult data}]
+
+The parity model narrowed the overall positive prediction gap from \gap{18.24} to \gap{2.26}, while the gap in correctly finding actual high earners grew from \gap{9.18} to \gap{26.83}. Equalized odds reduced both error-rate gaps and kept accuracy close to baseline.
+
+\section*{Data and training}
+
+After combining the two source files and dropping rows with missing values, we kept the starter's 70/30 split and set aside 20\% of its training portion for validation. All runs used 25,324 training, 6,331 validation, and 13,567 test rows and omitted census weights. We fitted scaling and category encoding on the training rows. In the sex runs, the adversary predicts the Male indicator and the predictor does not receive sex.
+
+The predictor has two 64-unit ReLU layers. All runs used Adam, 20 epochs, batches of 128, and seed 42. The predictor starts at a learning rate of 0.001 with cosine decay. The adversary uses 0.01. The baseline trains only the predictor. The parity adversary guesses group membership from the model score alone. Equalized odds adds the true label and score-label interactions. The paper used logistic regression on Adult. [\href{https://www.aies-conference.com/2018/contents/papers/main/AIES_2018_paper_162.pdf}{Zhang, Lemoine and Mitchell, 2018}]
+
+\textbf{How to read the gaps.} DP compares overall positive prediction rates. TPR compares the share of actual positives found. FPR compares the share of actual negatives wrongly flagged. Gaps are absolute differences in percentage points (pp). From 10\% to 15\% is 5 pp.
+
+\section*{Sex-based test results}
+
+{\small\renewcommand{\arraystretch}{1.06}
+\begin{tabularx}{\linewidth}{@{}Lrrrr@{}}
+\toprule
+Run & Accuracy & DP gap & TPR gap & FPR gap\\
+ & (\%) & (pp) & (pp) & (pp)\\
+\midrule
+Baseline & 84.79 & 18.24 & 9.18 & 7.96\\
+Demographic parity & 83.25 & \textbf{2.26} & 26.83 & 3.14\\
+Equalized odds & 84.68 & 12.94 & 4.76 & 4.07\\
+Parity with a hidden adversary layer & 83.25 & 3.01 & 25.54 & 2.42\\
+Equalized odds with a hidden adversary layer & 84.75 & 13.61 & 4.24 & 4.80\\
+Equalized odds with a square-root weight & 84.62 & 13.08 & 6.18 & 4.52\\
+Equal opportunity & 84.81 & 16.15 & 3.53 & 6.57\\
+Parity with gradient reversal & 84.31 & 8.94 & 15.60 & \textbf{1.83}\\
+Parity adversary on the 64 hidden values & 84.83 & 14.21 & \textbf{1.81} & 5.03\\
+\bottomrule
+\end{tabularx}\par}
+{\small\color{muted}Table 1. Final-epoch results with a common cutoff of 0.5. The three race runs are in Q8.\par}
+
+\newpage
+\question{1}{How does adversary loss change?}
+
+Both losses dropped early and then moved very little. The parity loss settled near 0.6326, what an adversary would get by guessing from the overall group proportions. Equalized odds has a lower reference of 0.6054 because its adversary can use the group proportions separately for \(Y=0\) and \(Y=1\). The loss finished slightly below that reference, which suggests the score may still help it guess the group.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}Lrrrrr@{}}
+\toprule
+Mode & Epoch 1 & Epoch 2 & Epoch 5 & Epoch 20 & Reference\\
+\midrule
+Parity & 0.6393 & 0.6320 & 0.6327 & 0.6324 & 0.6326\\
+Equalized odds & 0.6152 & 0.6066 & 0.6005 & 0.6009 & 0.6054\\
+\bottomrule
+\end{tabularx}\par}
+
+\plot{2.12in}{results/sex/adversary_loss.png}{Figure 1. Adversary training loss. Lower loss means better group prediction.}
+
+\question{2}{How do the score distributions change?}
+
+The baseline assigns many women scores close to zero. Men's scores spread farther to the right. After parity training, the mean score for women rises from 0.117 to 0.235 and the mean for men falls from 0.307 to 0.248. The two distributions overlap more. At the 0.5 cutoff, the share predicted positive moves from \rate{8.38} to \rate{15.60} for women and from \rate{26.62} to \rate{17.86} for men. That is how the overall prediction-rate gap shrinks.
+
+\plot{2.29in}{results/sex/scores.png}{Figure 2. Test probabilities from the sigmoid of each predictor's output. Each group's bars sum to one. The dashed line marks the 0.5 cutoff.}
+
+\newpage
+\question{3}{Why does the TPR gap grow under parity?}
+
+Men had a higher rate of actual incomes over \$50,000 in this test set, \rate{31.08} versus \rate{11.62} for women. A model can predict positive at similar overall rates while finding very different fractions of the actual positives. The parity model found more of the actual positives among women and fewer among men than the baseline did.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}Lrrrr@{}}
+\toprule
+Model & Women's TPR & Men's TPR & Women's FPR & Men's FPR\\
+\midrule
+Baseline & 53.33\% & 62.52\% & 2.47\% & 10.43\%\\
+Parity & 73.53\% & 46.70\% & 7.99\% & 4.85\%\\
+\bottomrule
+\end{tabularx}\par}
+
+A group's total positive prediction rate \(q\) comes from two sources. If \(\pi\) is the share of actual positives in that group, then
+\[
+q = \pi \cdot \mathrm{TPR} + (1-\pi)\cdot \mathrm{FPR}.
+\]
+At the women's parity-model error rates, the difference in the share of actual positives would create a \gap{12.75} lead in men's positive prediction rate. The lower TPR for men took about \gap{8.34} off that lead, and their lower FPR took off another \gap{2.16}. The remaining gap was \gap{2.26}, using unrounded rates. This explains why a small overall gap can coexist with a large TPR gap.
+
+\question{4}{Can both fairness rules hold when base rates differ?}
+
+Exact equalized odds means both groups have the same TPR, \(t\), and the same FPR, \(f\). Let \(\pi_M\) and \(\pi_F\) be the actual positive rates for men and women. Substituting the shared error rates into the equation above gives
+\[
+q_M-q_F=(\pi_M-\pi_F)(t-f).
+\]
+Exact parity requires the left side to be zero. When the base rates differ, the only way to get zero is \(t=f\). The decision then marks actual positives and actual negatives at the same rate within each group. A constant decision or a coin flip can do that. A useful binary decision that finds positives more often than it flags negatives cannot meet both exact rules under unequal base rates. [\href{https://arxiv.org/abs/1610.02413}{Hardt, Price and Srebro, 2016}]
+
+\question{5}{Why does removing sex leave a disparity?}
+
+Other columns can still give clues about sex. The table ranks the five strongest training-set correlations by absolute size. Positive values mean the feature is more common among men, and negative values mean it is more common among women.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}Lr@{}}
+\toprule
+Input feature & Correlation with Male indicator\\
+\midrule
+Relationship = Husband & $+0.585$\\
+Marital status = Married-civ-spouse & $+0.442$\\
+Relationship = Unmarried & $-0.322$\\
+Relationship = Wife & $-0.315$\\
+Occupation = Adm-clerical & $-0.282$\\
+\bottomrule
+\end{tabularx}\par}
+
+\emph{Husband} and \emph{Wife} are especially direct clues. Income rates also differ across the groups, so a model using income-related features can learn decisions that differ by group. These correlations show how much group information is available in each feature. Measuring how much the fitted model relies on each feature would require a different analysis.
+
+\newpage
+\question{6}{Does a hidden layer help the adversary?}
+
+We added a 16-unit ReLU layer to the adversary in two runs. For parity, the test DP gap grew from \gap{2.26} to \gap{3.01}, with accuracy still at about \rate{83.25}. For equalized odds, the TPR gap shrank from \gap{4.76} to \gap{4.24}, while the FPR gap grew from \gap{4.07} to \gap{4.80}. The extra layer gave a mixed result across these measures.
+
+To measure late training swings, we took the standard deviation of each validation gap over epochs 11--20. The parity DP swing rose from \gap{0.66} to \gap{0.79}. For equalized odds, the TPR and FPR swings rose from \gap{0.48} and \gap{0.17} to \gap{0.67} and \gap{0.24}. A more flexible adversary can pick up more complex patterns and send stronger or less steady feedback to the predictor. The observed swings describe this seed.
+
+\question{7}{What happens when the adversary weight grows?}
+
+We set \(\alpha_t=\sqrt{t/T}\) for equalized odds, where \(t\) is the training step and \(T=3{,}960\) is the total. This starts near zero and reaches 1, the same weight used throughout the constant run. We kept the predictor's learning-rate schedule fixed to compare the effect of changing this weight. The paper paired an unscaled \(\sqrt{t}\) weight with a step size proportional to \(1/t\). [\href{https://www.aies-conference.com/2018/contents/papers/main/AIES_2018_paper_162.pdf}{Zhang, Lemoine and Mitchell, Section 6}]
+
+The growing-weight run reached \rate{84.62} accuracy and improved all three gaps compared with the no-debiasing baseline. Constant-weight equalized odds reached \rate{84.68} and had smaller gaps. One possible reason is that the growing weight applied weaker pressure for most of training.
+
+\question{8}{What changes when we use race?}
+
+We set \(Z=1\) for White and \(Z=0\) for everyone else. We removed race from the model inputs and kept sex. The models used the same data split as the sex experiments.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}Lrrrr@{}}
+\toprule
+Run & Accuracy (\%) & DP gap (pp) & TPR gap (pp) & FPR gap (pp)\\
+\midrule
+Baseline & 84.75 & 10.58 & 8.29 & 4.02\\
+Demographic parity & 84.67 & \textbf{5.84} & 2.25 & \textbf{0.41}\\
+Equalized odds & 84.72 & 8.44 & \textbf{1.51} & 2.61\\
+\bottomrule
+\end{tabularx}\par}
+{\small\color{muted}Table 2. Race-based test results. The protected groups are White and all other recorded categories combined.\par}
+
+The race baseline had smaller gaps than the sex baseline on all three measures. The actual positive rates were \rate{26.32} for White records and \rate{15.26} for all other records, a gap of \gap{11.06} versus \gap{19.46} for sex. Each baseline also keeps a different set of input features. Pooling several categories can hide differences between them, and the pooled group had 288 actual positives versus 3,074 in the White group.
+
+\question{9}{What happens when we target equal opportunity?}
+
+The adversary learns only from rows with \(Y=1\). The predictor learns from the whole batch. Compared with equalized odds, the test TPR gap fell from \gap{4.76} to \gap{3.53} and the FPR gap rose from \gap{4.07} to \gap{6.57}. The model got closer on the rate it was trained to match. The adversary had no direct penalty for differences among actual negatives.
+
+\newpage
+\question{10}{How does gradient reversal compare with projection?}
+
+The gradient reversal layer passes the score through as it is. During backpropagation it flips the sign of the adversary's gradient going into the predictor and scales it by \(\alpha\). The two networks train with one ordinary backward pass on \(L_P+L_A\). As a result, the adversary tries to improve its group guesses while the predictor tries to make those guesses harder. [\href{https://jmlr.csail.mit.edu/papers/v17/15-239.html}{Ganin et al., 2016}]
+
+Let \(g_P\) be the income-loss gradient and \(g_A\) the group-loss gradient, both taken with respect to the predictor. Reversal uses \(g_P-\alpha g_A\). Projection uses \(g_P-\operatorname{proj}_{g_A}(g_P)-\alpha g_A\). It also removes the part of \(g_P\) parallel to \(g_A\) across all predictor parameters. That component can help the adversary lower its loss.
+
+Relative to the baseline, reversal cut test DP from \gap{18.24} to \gap{8.94} and FPR gap from \gap{7.96} to \gap{1.83}. The TPR gap grew to \gap{15.60} and accuracy fell by \gap{0.48}. Projection closed the DP gap further, to \gap{2.26}, with \gap{1.06} lower accuracy than reversal.
+
+\question{11}{What if the adversary sees the last 64 hidden values?}
+
+The test DP gap fell from \gap{18.24} to \gap{14.21}, still much higher than the \gap{2.26} achieved when the adversary saw the output score. This run also happened to have a low test TPR gap of \gap{1.81}. If the hidden values were fully independent of sex, any score made from those values would be independent too. A linear adversary can miss ways in which the 64 values jointly reveal the group.
+
+Over the final ten epochs, validation DP varied by \gap{0.90} standard deviation versus \gap{0.66} with the output adversary. The corresponding adversary-loss variation rose from 0.00021 to 0.03260 nats. Figure 1 shows the large swings in this run.
+
+\question{12}{How do group-specific cutoffs compare with parity training?}
+
+We reused the baseline scores and searched for two cutoffs on validation. We maximized accuracy subject to a DP gap of at most \gap{0.50} and kept each group with both positive and negative decisions. The chosen cutoffs were \textbf{0.194563 for women} and \textbf{0.669640 for men}. We then applied these same values to the test set.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}lLrrrr@{}}
+\toprule
+Split & Decision rule & Accuracy (\%) & DP (pp) & TPR (pp) & FPR (pp)\\
+\midrule
+Validation & Baseline, common cutoff & 85.36 & 19.10 & 12.47 & 8.30\\
+ & Baseline, group cutoffs & 83.62 & \textbf{0.48} & 28.49 & 5.03\\
+ & Adversarial parity & 83.98 & 2.21 & 27.01 & 3.27\\
+\addlinespace[2pt]
+Test & Baseline, common cutoff & 84.79 & 18.24 & 9.18 & 7.96\\
+ & Baseline, group cutoffs & 83.21 & \textbf{0.18} & 33.86 & 4.56\\
+ & Adversarial parity & 83.25 & 2.26 & 26.83 & 3.14\\
+\bottomrule
+\end{tabularx}\par}
+{\small\color{muted}Table 3. The baseline with a common cutoff and the adversarial model both use 0.5.\par}
+
+Group cutoffs are simpler to fit because the model is already trained. On test they gave almost the same accuracy as adversarial parity and a smaller DP gap, with larger TPR and FPR gaps. They also need the sex field at prediction time. Adversarial parity uses one cutoff for everyone and gives the smaller conditional gaps of these two methods. Which method works better depends on whether matching overall selection rates or matching error rates matters more.
+
+\end{document}
